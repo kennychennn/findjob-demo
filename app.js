@@ -88,12 +88,14 @@ let userLocation = null;
 let searchRadiusKm = 20;
 let userMarker = null;
 let radiusCircle = null;
+let manualSelectionEnabled = false;
 
 const locateButton = $('#locate-button');
 const radiusRange = $('#radius-range');
 const radiusValue = $('#radius-value');
 const locationStatus = $('#location-status');
 const clearLocationButton = $('#clear-location');
+const manualLocationButton = $('#manual-location');
 
 const map = L.map('map', { scrollWheelZoom: false, zoomControl: true, preferCanvas: true });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -150,7 +152,10 @@ function formatDistance(distance) {
 
 function updateLocationLayers() {
   if (!userLocation) return;
-  if (radiusCircle) radiusCircle.setRadius(searchRadiusKm * 1000);
+  if (radiusCircle) {
+    radiusCircle.setLatLng([userLocation.lat, userLocation.lng]);
+    radiusCircle.setRadius(searchRadiusKm * 1000);
+  }
   else {
     radiusCircle = L.circle([userLocation.lat, userLocation.lng], {
       radius: searchRadiusKm * 1000,
@@ -167,7 +172,7 @@ function updateLocationLayers() {
       weight: 3,
       fillColor: '#315f4b',
       fillOpacity: 1
-    }).bindPopup('你的目前位置').addTo(map);
+    }).bindPopup('目前搜尋中心').addTo(map);
   } else userMarker.setLatLng([userLocation.lat, userLocation.lng]);
 }
 
@@ -287,7 +292,21 @@ $('#clear-filters').addEventListener('click', () => {
   favoritesOnly = false;
   render();
 });
+function setSearchLocation(latitude, longitude, message) {
+  userLocation = { lat: Number(latitude), lng: Number(longitude) };
+  manualSelectionEnabled = false;
+  manualLocationButton.setAttribute('aria-pressed', 'false');
+  radiusRange.disabled = false;
+  clearLocationButton.hidden = false;
+  updateLocationLayers();
+  locationStatus.textContent = message;
+  map.setView([userLocation.lat, userLocation.lng], 12, { animate: true });
+  render();
+}
+
 locateButton.addEventListener('click', () => {
+  manualSelectionEnabled = false;
+  manualLocationButton.setAttribute('aria-pressed', 'false');
   if (!navigator.geolocation) {
     locationStatus.textContent = '目前瀏覽器不支援定位功能。';
     showToast('瀏覽器不支援定位功能');
@@ -296,42 +315,54 @@ locateButton.addEventListener('click', () => {
   locateButton.disabled = true;
   locationStatus.textContent = '正在取得目前位置…';
   navigator.geolocation.getCurrentPosition((position) => {
-    userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
     locateButton.disabled = false;
     locateButton.querySelector('span').textContent = '更新目前位置';
-    radiusRange.disabled = false;
-    clearLocationButton.hidden = false;
-    locationStatus.textContent = '已取得位置；座標只在本機比對，職缺依直線距離排序。';
-    updateLocationLayers();
-    map.setView([userLocation.lat, userLocation.lng], 12, { animate: true });
-    render();
+    setSearchLocation(position.coords.latitude, position.coords.longitude, '已取得位置；座標只在本機比對，職缺依直線距離排序。');
     showToast('已取得位置，正在搜尋附近職缺');
   }, (error) => {
     locateButton.disabled = false;
     const message = error.code === 1
-      ? '定位權限未開啟；請在瀏覽器允許此網站使用位置。'
+      ? '定位權限未開啟；請在瀏覽器允許此網站使用位置，或改用地圖選擇中心。'
       : error.code === 3
-        ? '取得位置逾時，請確認定位服務後再試一次。'
-        : '目前無法取得位置，請稍後再試。';
+        ? '取得位置逾時，請確認定位服務後再試一次，或改用地圖選擇中心。'
+        : '目前無法取得位置，請稍後再試或改用地圖選擇中心。';
     locationStatus.textContent = message;
     showToast(message);
   }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 });
 });
+
+manualLocationButton.addEventListener('click', () => {
+  manualSelectionEnabled = !manualSelectionEnabled;
+  manualLocationButton.setAttribute('aria-pressed', String(manualSelectionEnabled));
+  locationStatus.textContent = manualSelectionEnabled
+    ? '請在地圖上點選搜尋中心；位置只會在此瀏覽器比對。'
+    : '已取消地圖選擇。';
+});
+
+map.on('click', (event) => {
+  if (!manualSelectionEnabled) return;
+  locateButton.querySelector('span').textContent = '使用目前位置';
+  setSearchLocation(event.latlng.lat, event.latlng.lng, '已使用地圖上的位置作為搜尋中心。');
+  showToast('已設定搜尋中心');
+});
+
 radiusRange.addEventListener('input', () => {
   searchRadiusKm = Number(radiusRange.value);
   radiusValue.textContent = `${searchRadiusKm} 公里`;
   if (userLocation) {
     updateLocationLayers();
-    locationStatus.textContent = `顯示距離目前位置 ${searchRadiusKm} 公里內的模擬職缺。`;
+    locationStatus.textContent = `顯示搜尋中心 ${searchRadiusKm} 公里內的模擬職缺。`;
     render();
   }
 });
 clearLocationButton.addEventListener('click', () => {
   userLocation = null;
+  manualSelectionEnabled = false;
+  manualLocationButton.setAttribute('aria-pressed', 'false');
   radiusRange.disabled = true;
   clearLocationButton.hidden = true;
   locateButton.querySelector('span').textContent = '使用目前位置';
-  locationStatus.textContent = '已關閉附近搜尋；取得位置後可重新設定半徑。';
+  locationStatus.textContent = '已關閉附近搜尋；可重新定位或在地圖選擇中心。';
   if (userMarker) map.removeLayer(userMarker);
   if (radiusCircle) map.removeLayer(radiusCircle);
   userMarker = null;

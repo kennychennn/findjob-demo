@@ -7,7 +7,7 @@
     <meta name="description" content="FindJob 職缺探索展示版，使用模擬資料呈現職缺搜尋與地圖瀏覽。" />
     <title>FindJob｜找到適合你的下一站</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="styles.css?v=3" />
   </head>
   <body>
     <header class="topbar">
@@ -63,12 +63,15 @@
         <button class="search-button" id="search-button" type="button"><span>搜尋職缺</span><span aria-hidden="true">↗</span></button>
       </section>
 
-      <section class="nearby-panel" aria-label="依目前位置搜尋附近職缺">
+      <section class="nearby-panel" aria-label="依搜尋中心搜尋附近職缺">
         <div class="nearby-copy">
           <strong>搜尋附近職缺</strong>
-          <span id="location-status" role="status" aria-live="polite">定位需由你在瀏覽器允許；座標會在本機比對。</span>
+          <span id="location-status" role="status" aria-live="polite">授權定位或在地圖選擇中心；座標只在本機比對。</span>
         </div>
-        <button class="location-button" id="locate-button" type="button">⌖ <span>使用目前位置</span></button>
+        <div class="location-actions">
+          <button class="location-button" id="locate-button" type="button">⌖ <span>使用目前位置</span></button>
+          <button class="location-button manual-location" id="manual-location" type="button" aria-pressed="false">在地圖選中心</button>
+        </div>
         <label class="radius-control" for="radius-range">
           <span class="radius-heading"><span>搜尋半徑</span><strong id="radius-value">20 公里</strong></span>
           <input id="radius-range" type="range" min="1" max="100" step="1" value="20" disabled aria-describedby="radius-help" />
@@ -122,6 +125,6 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=3"></script>
   </body>
 </html>
