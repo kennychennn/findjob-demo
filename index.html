@@ -60,6 +60,21 @@
         <button class="search-button" id="search-button" type="button"><span>搜尋職缺</span><span aria-hidden="true">↗</span></button>
       </section>
 
+      <section class="nearby-panel" aria-label="依目前位置搜尋附近職缺">
+        <div class="nearby-copy">
+          <strong>搜尋附近職缺</strong>
+          <span id="location-status" role="status" aria-live="polite">定位需由你在瀏覽器允許；座標會在本機比對。</span>
+        </div>
+        <button class="location-button" id="locate-button" type="button">⌖ <span>使用目前位置</span></button>
+        <label class="radius-control" for="radius-range">
+          <span class="radius-heading"><span>搜尋半徑</span><strong id="radius-value">20 公里</strong></span>
+          <input id="radius-range" type="range" min="1" max="100" step="1" value="20" disabled aria-describedby="radius-help" />
+          <span class="radius-scale" id="radius-help"><span>1 公里</span><span>100 公里</span></span>
+        </label>
+        <button class="location-clear" id="clear-location" type="button" hidden>關閉附近搜尋</button>
+        <p class="location-privacy-note">載入附近地圖底圖時，OpenStreetMap 會收到相應範圍的圖磚請求。</p>
+      </section>
+
       <section class="workspace" id="jobs" aria-label="職缺搜尋結果與地圖">
         <div class="results-column">
           <div class="results-heading">
@@ -75,13 +90,13 @@
             <strong>沒有找到符合的職缺</strong>
             <p>換個關鍵字或地點再試試看。</p>
           </div>
-          <p class="data-note"><span aria-hidden="true">✳</span> 本頁為作品展示，職缺與公司資料皆為模擬內容。</p>
+          <p class="data-note"><span aria-hidden="true">✳</span> 本頁職缺與公司資料皆為模擬內容。</p>
         </div>
 
         <aside class="map-column" aria-label="職缺地圖">
           <div class="map-heading">
             <div><span class="live-dot"></span><span>地圖探索</span></div>
-            <span class="map-hint">選擇標記查看職缺</span>
+            <span class="map-hint" id="map-hint">選擇標記查看職缺</span>
           </div>
           <div id="map" role="application" aria-label="台灣職缺地圖"></div>
           <div class="map-legend"><span class="legend-pin"></span> <span>目前顯示 <b id="map-count">4</b> 個職缺</span></div>

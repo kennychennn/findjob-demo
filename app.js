@@ -35,6 +35,16 @@ const saved = new Set(JSON.parse(localStorage.getItem('findjob-demo-favorites') 
 let favoritesOnly = false;
 let selectedId = null;
 let toastTimer;
+let userLocation = null;
+let searchRadiusKm = 20;
+let userMarker = null;
+let radiusCircle = null;
+
+const locateButton = $('#locate-button');
+const radiusRange = $('#radius-range');
+const radiusValue = $('#radius-value');
+const locationStatus = $('#location-status');
+const clearLocationButton = $('#clear-location');
 
 const map = L.map('map', { scrollWheelZoom: false, zoomControl: true, preferCanvas: true });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -63,13 +73,53 @@ map.fitBounds(allCoordinates, { padding: [34, 34], maxZoom: 6 });
 function filteredJobs() {
   const term = keywordInput.value.trim().toLocaleLowerCase();
   const city = citySelect.value;
-  return jobs.filter((job) => {
+  const results = jobs.filter((job) => {
     const searchText = `${job.name} ${job.company} ${job.skill} ${job.address}`.toLocaleLowerCase();
     const matchesKeyword = !term || searchText.includes(term);
     const matchesCity = city === '全部地區' || job.city === city;
     const matchesFavorite = !favoritesOnly || saved.has(job.id);
-    return matchesKeyword && matchesCity && matchesFavorite;
+    const distance = userLocation ? distanceInKm(userLocation, job) : null;
+    const matchesRadius = !userLocation || distance <= searchRadiusKm;
+    return matchesKeyword && matchesCity && matchesFavorite && matchesRadius;
   });
+  if (userLocation) results.sort((a, b) => distanceInKm(userLocation, a) - distanceInKm(userLocation, b));
+  return results;
+}
+
+function distanceInKm(origin, destination) {
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const latDelta = radians(destination.lat - origin.lat);
+  const lngDelta = radians(destination.lng - origin.lng);
+  const a = Math.sin(latDelta / 2) ** 2
+    + Math.cos(radians(origin.lat)) * Math.cos(radians(destination.lat)) * Math.sin(lngDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistance(distance) {
+  return distance < 10 ? `${distance.toFixed(1)} 公里` : `${Math.round(distance)} 公里`;
+}
+
+function updateLocationLayers() {
+  if (!userLocation) return;
+  if (radiusCircle) radiusCircle.setRadius(searchRadiusKm * 1000);
+  else {
+    radiusCircle = L.circle([userLocation.lat, userLocation.lng], {
+      radius: searchRadiusKm * 1000,
+      color: '#52775e',
+      weight: 1.5,
+      fillColor: '#a9c69c',
+      fillOpacity: 0.16
+    }).addTo(map);
+  }
+  if (!userMarker) {
+    userMarker = L.circleMarker([userLocation.lat, userLocation.lng], {
+      radius: 8,
+      color: '#fff',
+      weight: 3,
+      fillColor: '#315f4b',
+      fillOpacity: 1
+    }).bindPopup('你的目前位置').addTo(map);
+  } else userMarker.setLatLng([userLocation.lat, userLocation.lng]);
 }
 
 function render() {
@@ -82,6 +132,7 @@ function render() {
         <span class="company-name">${job.company}</span>
         <div class="job-meta">
           <span class="place">${job.city}・${job.district}</span>
+          ${userLocation ? `<span class="distance-badge">${formatDistance(distanceInKm(userLocation, job))}</span>` : ''}
           <span class="kind">${job.type}</span>
           <span>${job.experience}</span>
         </div>
@@ -103,6 +154,7 @@ function render() {
   $('#hero-job-count').textContent = String(results.length).padStart(2, '0');
   $('#favorite-count').textContent = String(saved.size);
   favoritesToggle.setAttribute('aria-pressed', String(favoritesOnly));
+  $('#map-hint').textContent = userLocation ? `距離 ${searchRadiusKm} 公里內` : '選擇標記查看職缺';
 
   markers.forEach((marker, id) => {
     const visible = results.some((job) => job.id === id);
@@ -111,7 +163,10 @@ function render() {
   });
   if (results.length) {
     const coords = results.map((job) => [job.lat, job.lng]);
+    if (userLocation) coords.push([userLocation.lat, userLocation.lng]);
     map.fitBounds(coords, { padding: [34, 34], maxZoom: results.length === 1 ? 12 : 6, animate: false });
+  } else if (userLocation) {
+    map.setView([userLocation.lat, userLocation.lng], 12, { animate: false });
   }
 }
 
@@ -181,6 +236,57 @@ $('#clear-filters').addEventListener('click', () => {
   keywordInput.value = '';
   citySelect.value = '全部地區';
   favoritesOnly = false;
+  render();
+});
+locateButton.addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    locationStatus.textContent = '目前瀏覽器不支援定位功能。';
+    showToast('瀏覽器不支援定位功能');
+    return;
+  }
+  locateButton.disabled = true;
+  locationStatus.textContent = '正在取得目前位置…';
+  navigator.geolocation.getCurrentPosition((position) => {
+    userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+    locateButton.disabled = false;
+    locateButton.querySelector('span').textContent = '更新目前位置';
+    radiusRange.disabled = false;
+    clearLocationButton.hidden = false;
+    locationStatus.textContent = '已取得位置；座標只在本機比對，職缺依直線距離排序。';
+    updateLocationLayers();
+    map.setView([userLocation.lat, userLocation.lng], 12, { animate: true });
+    render();
+    showToast('已取得位置，正在搜尋附近職缺');
+  }, (error) => {
+    locateButton.disabled = false;
+    const message = error.code === 1
+      ? '定位權限未開啟；請在瀏覽器允許此網站使用位置。'
+      : error.code === 3
+        ? '取得位置逾時，請確認定位服務後再試一次。'
+        : '目前無法取得位置，請稍後再試。';
+    locationStatus.textContent = message;
+    showToast(message);
+  }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 });
+});
+radiusRange.addEventListener('input', () => {
+  searchRadiusKm = Number(radiusRange.value);
+  radiusValue.textContent = `${searchRadiusKm} 公里`;
+  if (userLocation) {
+    updateLocationLayers();
+    locationStatus.textContent = `顯示距離目前位置 ${searchRadiusKm} 公里內的模擬職缺。`;
+    render();
+  }
+});
+clearLocationButton.addEventListener('click', () => {
+  userLocation = null;
+  radiusRange.disabled = true;
+  clearLocationButton.hidden = true;
+  locateButton.querySelector('span').textContent = '使用目前位置';
+  locationStatus.textContent = '已關閉附近搜尋；取得位置後可重新設定半徑。';
+  if (userMarker) map.removeLayer(userMarker);
+  if (radiusCircle) map.removeLayer(radiusCircle);
+  userMarker = null;
+  radiusCircle = null;
   render();
 });
 favoritesToggle.addEventListener('click', () => {
